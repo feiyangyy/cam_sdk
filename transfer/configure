@@ -1,0 +1,143 @@
+TRANSFER_TYPE_CONTROL: 0
+TRANSFER_TYPE_ISOCHRONOUS: 1
+TRANSFER_TYPE_BULK: 2
+TRANSFER_TYPE_INTERRUPT: 3
+Found 4e56:5056
+DEVICE ID 4e56:5056 on Bus 001 Address 010 =================
+ bLength                :   0x12 (18 bytes)
+ bDescriptorType        :    0x1 Device
+ bcdUSB                 :  0x210 USB 2.1
+ bDeviceClass           :   0xef Miscellaneous
+ bDeviceSubClass        :    0x2
+ bDeviceProtocol        :    0x1
+ bMaxPacketSize0        :   0x40 (64 bytes)
+ idVendor               : 0x4e56
+ idProduct              : 0x5056
+ bcdDevice              :  0x409 Device 4.09
+ iManufacturer          :    0x1 vpu
+ iProduct               :    0x2 nvpu_com
+ iSerialNumber          :    0x3 0123456789.0123456789.0123456789
+ bNumConfigurations     :    0x1
+  CONFIGURATION 1: 2 mA ====================================
+   bLength              :    0x9 (9 bytes)
+   bDescriptorType      :    0x2 Configuration
+   wTotalLength         :   0x62 (98 bytes)
+   bNumInterfaces       :    0x3
+   bConfigurationValue  :    0x1
+   iConfiguration       :    0x4 vpu_com
+   bmAttributes         :   0xc0 Self Powered
+   bMaxPower            :    0x1 (2 mA)
+  ===============================================>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    INTERFACE 0: Vendor Specific ===========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x0
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x2
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x0
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x0 
+      ENDPOINT 0x81: Bulk IN ===============================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x81 IN
+       bmAttributes     :    0x2 Bulk
+       wMaxPacketSize   :  0x200 (512 bytes)
+       bInterval        :    0x0
+      ENDPOINT 0x1: Bulk OUT ===============================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :    0x1 OUT
+       bmAttributes     :    0x2 Bulk
+       wMaxPacketSize   :  0x200 (512 bytes)
+       bInterval        :    0x0
+===============================================>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    INTERFACE 1: CDC Communication =========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x1
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x1
+     bInterfaceClass    :    0x2 CDC Communication
+     bInterfaceSubClass :    0x2
+     bInterfaceProtocol :    0x1
+     iInterface         :    0x5 CDC Abstract Control Model (ACM)
+      ENDPOINT 0x83: Interrupt IN ==========================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x83 IN
+       bmAttributes     :    0x3 Interrupt
+       wMaxPacketSize   :    0xa (10 bytes)
+       bInterval        :    0x9
+===============================================>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    INTERFACE 2: CDC Data ==================================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x2
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x2
+     bInterfaceClass    :    0xa CDC Data
+     bInterfaceSubClass :    0x0
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x6 CDC ACM Data
+      ENDPOINT 0x82: Bulk IN ===============================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x82 IN
+       bmAttributes     :    0x2 Bulk
+       wMaxPacketSize   :  0x200 (512 bytes)
+       bInterval        :    0x0
+      ENDPOINT 0x2: Bulk OUT ===============================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :    0x2 OUT
+       bmAttributes     :    0x2 Bulk
+       wMaxPacketSize   :  0x200 (512 bytes)
+       bInterval        :    0x0
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+if you want to write to endpoints (bulk transfers etc) you have to obey the USB tree structure: -> configuration -> claim interface -> get endpoint
+
+
+
+  def EnumDevice(self):
+    devices = self.ctx.getDeviceList()
+    for device in devices:
+      # print("vid {}, pid {}")
+      for fm in self.FM_IDS:
+        if fm[0] == device.getVendorID() and fm[1] == device.getProductID():
+          print("Found a valid device!")
+          device.open()
+          return fm
+    return None
+            
+  def OpenDvice(self, vid, pid):
+    self.dev = self.ctx.getByVendorIDAndProductID(vid, pid)
+    if not self.dev:
+      print(f"Open {vid:04x}:{pid:04x} failed!")
+      return False
+    # 解析端点信息
+    # 打开了hnd
+    self.hnd = self.dev.open()
+    if self.hnd.kernelDriverActive(0):
+      self.hnd.detachKernelDriver(0)
+    # desc = self.hnd.getStringDescriptor()
+    # print(f"Device desc:", desc)
+    for cfg in self.dev.iterConfigurations():
+      print(f"  配置描述符长度: {len(cfg)}")
+      print(f"  配置值: {cfg.getConfigurationValue()}")
+      for inter in cfg.iterInterfaces():
+        for s in inter.iterSettings():
+          for e in s.iterEndpoints():
+            print("===========================>\n")
+            print(f"      端点地址: {e.getAddress():#04x}")
+            print(f"      端点类型: {e.getAttributes() & 0x03}")  # 低两位表示端点类型
+            print(f"      最大包大小: {e.getMaxPacketSize()}")
+            print("===========================>\n")
+    # self.hnd.close()
+    # self.dev.close()
+    return True
+
+
+fqTGzsQu7lc5v3VgKD2XNmUA7Rr251m7HEJMv0CuNg
